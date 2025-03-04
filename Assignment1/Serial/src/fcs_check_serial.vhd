@@ -5,7 +5,9 @@ use IEEE.NUMERIC_STD.ALL;
 
 entity fcs_check_serial is 
 	generic (
-		FRAME_BITS : integer := 512
+		FRAME_BITS : integer := 512;
+		CRC_SIZE   : integer := 32
+		
 	);
 	port (
 		clk            : in std_logic; -- system clock
@@ -38,12 +40,12 @@ end entity;
 
 
 ARCHITECTURE Behavior OF fcs_check_serial IS
-	constant C_REG_NUM : integer := 32;
+	constant C_REG_NUM : integer := CRC_SIZE;
+	constant POLY 		 : std_logic_vector(CRC_SIZE-1 downto 0) := x"04C11DB7";
 	signal regFileOut	 : std_logic_vector(c_REG_NUM-1 downto 0);
-	signal Gx			 : std_logic_vector(c_REG_NUM-1 downto 0) := x"04C11DB7"; -- CRC-32 polynomial
 	signal g 			 : std_logic_vector(c_REG_NUM-1 downto 0);
-	signal bit_count   : unsigned (FRAME_BITS downto 0);
-	signal bitCountReg : unsigned (FRAME_BITS downto 0) := (others => '0');
+	signal bit_count   : unsigned (9 downto 0);
+	signal bitCountReg : unsigned (9 downto 0);
 	signal compute_crc : std_logic := '0';
 	signal compl_en 	 : std_logic := '0';
 	signal data 		 : std_logic;
@@ -56,11 +58,11 @@ BEGIN
 	fcs_error   <= '0' when (bit_count = FRAME_BITS and regFileOut = x"00000000") else '1';  
 	
 	g(0) <= regFileOut(0) when compute_crc = '0' else 
-			data xor regFileOut(C_REG_NUM-1) when Gx(0) = '1';
+			data xor regFileOut(C_REG_NUM-1) when POLY(0) = '1';
 	
 	gen_gAssign : for i in 1 to C_REG_NUM-1 generate
 		g(i) <= regFileOut(i) when compute_crc = '0' else 
-					regFileOut(i-1) xor regFileOut(C_REG_NUM-1) when Gx(i) = '1'
+					regFileOut(i-1) xor regFileOut(C_REG_NUM-1) when POLY(i) = '1'
 					else regFileOut(i-1);
 	end generate;
 	
@@ -88,9 +90,8 @@ BEGIN
 				bitCountReg <= bitCountReg;
 			end if;
 		end if;
-		bit_count <= bitCountReg;
 	end process;
-
+	bit_count <= bitCountReg;
 END Behavior;
 
 
